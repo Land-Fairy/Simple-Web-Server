@@ -76,14 +76,18 @@ namespace SimpleWeb {
                     if(!lock)
                       return;
                     if(!ec) {
-                      std::shared_ptr<Response> response(new Response());
+                      std::shared_ptr<Response> response(new Response(this->config.max_response_streambuf_size));
                       session->connection->set_timeout(this->config.timeout_connect);
-                      asio::async_read_until(session->connection->socket->next_layer(), response->content_buffer, "\r\n\r\n", [this, session, response](const error_code &ec, size_t /*bytes_transferred*/) {
+                      asio::async_read_until(session->connection->socket->next_layer(), response->streambuf, "\r\n\r\n", [this, session, response](const error_code &ec, size_t /*bytes_transferred*/) {
                         session->connection->cancel_timeout();
                         auto lock = session->connection->handler_runner->continue_lock();
                         if(!lock)
                           return;
                         if(!ec) {
+                          if(response->streambuf.size() == response->streambuf.max_size()) {
+                            session->callback(session->connection, make_error_code::make_error_code(errc::message_size));
+                            return;
+                          }
                           if(!ResponseMessage::parse(response->content, response->http_version, response->status_code, response->header))
                             session->callback(session->connection, make_error_code::make_error_code(errc::protocol_error));
                           else {

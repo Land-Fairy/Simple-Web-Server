@@ -90,8 +90,8 @@ namespace SimpleWeb {
       /// Set connect timeout in seconds. Default value: 0 (Config::timeout is then used instead).
       long timeout_connect = 0;
       /// Maximum size of response stream buffer. Defaults to architecture maximum.
-      /// Exceeding this limit will result in a message_size error code.
-      size_t max_response_streambuf_size = (std::numeric_limits<std::size_t>::max)();
+      /// Reaching this limit will result in a message_size error code.
+      size_t max_response_streambuf_size = static_cast<size_t>(-1);
       /// Set proxy server (server:port)
       std::string proxy_server;
     };
@@ -548,7 +548,7 @@ namespace SimpleWeb {
         if(!lock)
           return;
         if(!ec) {
-          if(session->response->streambuf.size() == session->response->streambuf.max_size()) {
+          if(session->response->streambuf.size() + tmp_streambuf->size() >= session->response->streambuf.max_size()) {
             session->callback(session->connection, make_error_code::make_error_code(errc::message_size));
             return;
           }
@@ -591,19 +591,19 @@ namespace SimpleWeb {
           };
 
           if((2 + length) > num_additional_bytes) {
+            size_t size = 2 + length - num_additional_bytes;
+            if(session->response->streambuf.size() + tmp_streambuf->size() + size >= session->response->streambuf.max_size()) {
+              session->callback(session->connection, make_error_code::make_error_code(errc::message_size));
+              return;
+            }
             session->connection->set_timeout();
-            asio::async_read(*session->connection->socket, session->response->streambuf, asio::transfer_exactly(2 + length - num_additional_bytes), [this, session, post_process](const error_code &ec, size_t /*bytes_transferred*/) {
+            asio::async_read(*session->connection->socket, session->response->streambuf, asio::transfer_exactly(size), [this, session, post_process](const error_code &ec, size_t /*bytes_transferred*/) {
               session->connection->cancel_timeout();
               auto lock = session->connection->handler_runner->continue_lock();
               if(!lock)
                 return;
-              if(!ec) {
-                if(session->response->streambuf.size() == session->response->streambuf.max_size()) {
-                  session->callback(session->connection, make_error_code::make_error_code(errc::message_size));
-                  return;
-                }
+              if(!ec)
                 post_process();
-              }
               else
                 session->callback(session->connection, ec);
             });

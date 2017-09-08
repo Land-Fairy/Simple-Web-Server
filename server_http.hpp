@@ -279,8 +279,8 @@ namespace SimpleWeb {
       /// Timeout on content handling. Defaults to 300 seconds.
       long timeout_content = 300;
       /// Maximum size of request stream buffer. Defaults to architecture maximum.
-      /// Exceeding this limit will result in a message_size error code.
-      size_t max_request_streambuf_size = (std::numeric_limits<std::size_t>::max)();
+      /// Reaching this limit will result in a message_size error code.
+      size_t max_request_streambuf_size = static_cast<size_t>(-1);
       /// IPv4 address in dotted decimal form or IPv6 address in hexadecimal notation.
       /// If empty, the address will be any address.
       std::string address;
